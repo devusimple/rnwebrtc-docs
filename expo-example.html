@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="End-to-end Expo + react-native-webrtc guide: expo-router setup, dev build, signaling server, permissions, and video-call UI.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+    <title>Expo + webrtc — end-to-end example</title>
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        :root {
+            --bg: #0c1210;
+            --bg-panel: #121a17;
+            --line: #24312c;
+            --text: #dce7e1;
+            --text-dim: #8ba69a;
+            --signal: #ff8a4c;
+            --signal-dim: #7a4a2e;
+            --ok: #5ecb95;
+            --font-display: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-body: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            font-size: 16px;
+        }
+
+        a {
+            color: var(--signal);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* subtle scanning signal texture on the background */
+        .noise {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image: repeating-linear-gradient(0deg, rgba(255, 138, 76, 0.015) 0px, rgba(255, 138, 76, 0.015) 1px, transparent 1px, transparent 3px);
+        }
+
+        header.hero {
+            position: relative;
+            padding: 5rem 1.5rem 4rem;
+            max-width: 920px;
+            margin: 0 auto;
+        }
+
+        .kicker {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 1.6rem;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--ok);
+            box-shadow: 0 0 0 0 rgba(94, 203, 149, 0.6);
+            animation: ping 2.2s infinite;
+        }
+
+        @keyframes ping {
+            0% {
+                box-shadow: 0 0 0 0 rgba(94, 203, 149, 0.5);
+            }
+
+            70% {
+                box-shadow: 0 0 0 8px rgba(94, 203, 149, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(94, 203, 149, 0);
+            }
+        }
+
+        h1 {
+            font-family: var(--font-display);
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            font-size: clamp(2.4rem, 5vw, 3.6rem);
+            line-height: 1.08;
+            max-width: 14ch;
+            color: #f4efe8;
+        }
+
+        .lede {
+            margin-top: 1.4rem;
+            max-width: 56ch;
+            color: var(--text-dim);
+            font-size: 1.08rem;
+        }
+
+        .lede code {
+            color: var(--text);
+        }
+
+        .backlink {
+            display: inline-block;
+            margin-top: 1.6rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+
+        nav.toc {
+            max-width: 920px;
+            margin: 0 auto 3rem;
+            padding: 1rem 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0 1.6rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+        }
+
+        nav.toc a {
+            color: var(--text-dim);
+        }
+
+        nav.toc a:hover {
+            color: var(--signal);
+            text-decoration: none;
+        }
+
+        main {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 0 1.5rem 6rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        section {
+            padding-top: 4.5rem;
+            border-top: 1px solid var(--line);
+            scroll-margin-top: 70px;
+        }
+
+        section:first-child {
+            border-top: none;
+        }
+
+        .num {
+            font-family: var(--font-mono);
+            color: var(--signal-dim);
+            font-size: 0.85rem;
+            display: block;
+            margin-bottom: 0.8rem;
+        }
+
+        h2 {
+            font-family: var(--font-display);
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            font-size: 1.9rem;
+            color: #f4efe8;
+            margin-bottom: 1rem;
+        }
+
+        h3 {
+            font-family: var(--font-body);
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: var(--text);
+            margin: 2rem 0 0.8rem;
+        }
+
+        p {
+            max-width: 68ch;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        p.note {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+
+        ul,
+        ol {
+            margin: 0 0 1rem 1.3rem;
+            max-width: 66ch;
+        }
+
+        li {
+            margin-bottom: 0.4rem;
+        }
+
+        .callout {
+            border-left: 2px solid var(--signal);
+            background: rgba(255, 138, 76, 0.06);
+            padding: 0.9rem 1.1rem;
+            margin: 1.4rem 0;
+            max-width: 66ch;
+            font-size: 0.95rem;
+            color: var(--text-dim);
+        }
+
+        .callout strong {
+            color: var(--text);
+        }
+
+        pre {
+            background: var(--bg-panel);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            padding: 1.2rem 1.3rem;
+            overflow-x: auto;
+            margin: 1.2rem 0 1.6rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.55;
+        }
+
+        pre .filename {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-bottom: 0.8rem;
+            text-transform: none;
+        }
+
+        code {
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+        }
+
+        p code,
+        li code {
+            background: var(--bg-panel);
+            border: 1px solid var(--line);
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            color: #f0c9a8;
+        }
+
+        .tok-kw {
+            color: #ff8a4c;
+        }
+
+        .tok-str {
+            color: #a8d5ba;
+        }
+
+        .tok-com {
+            color: #5b7269;
+        }
+
+        .tok-fn {
+            color: #8fc7e8;
+        }
+
+        .tok-const {
+            color: #e8b76e;
+        }
+
+        #topbar {
+            position: sticky;
+            top: 0;
+            background: rgba(12, 18, 16, 0.92);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 99;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            max-width: 66ch;
+            margin: 1.4rem 0;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            min-width: 560px;
+            border-collapse: collapse;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 0.55rem 0.8rem;
+            border-bottom: 1px solid var(--line);
+        }
+
+        th {
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        td code {
+            font-size: 0.82rem;
+        }
+
+        footer {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 4rem;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            font-family: var(--font-mono);
+            border-top: 1px solid var(--line);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="noise"></div>
+
+    <header class="hero">
+        <div class="kicker"><span class="pulse"></span> dev-client build — expo-router + webrtc</div>
+        <h1>Expo video calls, from blank project to two phones</h1>
+        <p class="lede">An end-to-end build with <code>expo-router</code> + <code>react-native-webrtc</code>: scaffold
+            the app, install the native module, ship a development build, run a tiny signaling server, handle
+            permissions, and render the call UI. For the WebRTC concepts underneath, read the
+            <a href="index.html">field guide</a> first.</p>
+        <a class="backlink" href="index.html">&larr; back to the field guide</a>
+    </header>
+
+    <nav class="toc" id="topbar">
+        <a href="#build">What you build</a>
+        <a href="#scaffold">Scaffold</a>
+        <a href="#packages">Packages</a>
+        <a href="#config">Config</a>
+        <a href="#devbuild">Dev build</a>
+        <a href="#server">Signaling</a>
+        <a href="#permissions">Permissions</a>
+        <a href="#call">Call logic</a>
+        <a href="#ui">UI screens</a>
+        <a href="#run">Run &amp; debug</a>
+    </nav>
+
+    <main>
+
+        <section id="build">
+            <span class="num">01</span>
+            <h2>What you build</h2>
+            <p>Two phones join the same room name (e.g. <code>demo</code>) and get a 1:1 video call. A small
+                Node + Socket.IO server only passes <code>join</code> / <code>offer</code> / <code>answer</code> /
+                <code>ice-candidate</code> messages — media flows peer-to-peer after that.</p>
+            <pre><span class="filename">folder layout — webrtc-expo/</span>app/
+  _layout.tsx          <span class="tok-com"># expo-router Stack</span>
+  index.tsx            <span class="tok-com"># join screen (room name input)</span>
+  call/[room].tsx      <span class="tok-com"># call screen (RTCView + controls)</span>
+hooks/useCall.ts       <span class="tok-com"># peer connection + signaling wiring</span>
+lib/socket.ts          <span class="tok-com"># socket.io client singleton</span>
+lib/permissions.ts     <span class="tok-com"># camera + mic permission helper</span>
+lib/webrtc.ts          <span class="tok-com"># ICE servers + config</span>
+server/
+  package.json
+  server.js            <span class="tok-com"># tiny signaling server</span>
+app.json               <span class="tok-com"># expo config: router, permissions, scheme</span></pre>
+            <div class="callout">
+                <strong>You need two physical devices.</strong> Simulators lack cameras and
+                <code>react-native-webrtc</code> needs native code — so this whole guide targets a
+                <code>expo-dev-client</code> development build, never Expo Go.
+            </div>
+        </section>
+
+        <section id="scaffold">
+            <span class="num">02</span>
+            <h2>Scaffold an expo-router project</h2>
+            <pre><span class="filename">terminal</span>npx create-expo-app@latest webrtc-expo -t expo-template-blank-typescript
+<span class="tok-fn">cd</span> webrtc-expo
+npx expo install expo-router react-native-safe-area-context \
+  react-native-screens expo-linking expo-constants expo-status-bar</pre>
+            <p>Wire the router as the entry point and add a deep-link scheme (used later to re-open the dev client):</p>
+            <pre><span class="filename">app/_layout.tsx</span><span class="tok-kw">import</span> { Stack } <span class="tok-kw">from</span> <span class="tok-str">'expo-router'</span>;
+
+<span class="tok-kw">export default function</span> <span class="tok-fn">Layout</span>() {
+  <span class="tok-kw">return</span> &lt;Stack screenOptions={{ headerShown: <span class="tok-kw">false</span> }}&gt;
+    &lt;Stack.Screen name=<span class="tok-str">"index"</span> /&gt;
+    &lt;Stack.Screen name=<span class="tok-str">"call/[room]"</span> /&gt;
+  &lt;/Stack&gt;;
+}</pre>
+        </section>
+
+        <section id="packages">
+            <span class="num">03</span>
+            <h2>Install the required packages</h2>
+            <pre><span class="filename">terminal — app</span>npx expo install react-native-webrtc @config-plugins/react-native-webrtc expo-dev-client expo-camera socket.io-client
+
+<span class="filename">terminal — signaling server (separate folder)</span><span class="tok-fn">cd</span> server &amp;&amp; npm init -y &amp;&amp; npm install socket.io@^4 socket.io-client@^4
+<span class="tok-fn">cd</span> .. &amp;&amp; npm install -g eas-cli</pre>
+            <p class="note">Match versions per the <a
+                    href="https://github.com/expo/config-plugins/tree/master/packages/react-native-webrtc"
+                    target="_blank" rel="noopener">official config-plugin table</a> — e.g. Expo 52 →
+                <code>react-native-webrtc@124.0.4</code> + <code>@config-plugins/react-native-webrtc@10.0.0</code>.
+                The plugin sets minSdk 24 and <code>android.enableDexingArtifactTransform.desugaring=false</code> for
+                you (required by the official <a
+                    href="https://github.com/react-native-webrtc/react-native-webrtc/blob/master/Documentation/AndroidInstallation.md"
+                    target="_blank" rel="noopener">Android guide</a>).</p>
+            <div class="table-wrap">
+                <table>
+                    <tr>
+                        <th>Package</th>
+                        <th>Why</th>
+                    </tr>
+                    <tr>
+                        <td><code>react-native-webrtc</code></td>
+                        <td>The native WebRTC module: peer connection, camera capture, RTCView.</td>
+                    </tr>
+                    <tr>
+                        <td><code>expo-dev-client</code></td>
+                        <td>Custom dev client so native code runs on device (Expo Go can't).</td>
+                    </tr>
+                    <tr>
+                        <td><code>@config-plugins/react-native-webrtc</code></td>
+                        <td>Official Expo config plugin — writes the manifest/plist, disables bitcode (iOS),
+                            sets minSdk 24 + desugaring flag (Android). Rebuild after any change.</td>
+                    </tr>
+                    <tr>
+                        <td><code>expo-camera</code></td>
+                        <td>Only used for its permission request APIs for camera + mic.</td>
+                    </tr>
+                    <tr>
+                        <td><code>socket.io-client</code> / <code>socket.io</code></td>
+                        <td>Signaling transport between the two phones.</td>
+                    </tr>
+                    <tr>
+                        <td><code>eas-cli</code></td>
+                        <td>Builds the development .apk / .app with the native module inside.</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <section id="config">
+            <span class="num">04</span>
+            <h2>Configure app.json</h2>
+            <p>Router entry, deep-link scheme, camera plugin, and the Android + iOS permission strings. Without these,
+                <code>getUserMedia</code> hangs or rejects.</p>
+            <pre><span class="filename">app.json</span>{
+  <span class="tok-str">"expo"</span>: {
+    <span class="tok-str">"name"</span>: <span class="tok-str">"webrtc-expo"</span>,
+    <span class="tok-str">"slug"</span>: <span class="tok-str">"webrtc-expo"</span>,
+    <span class="tok-str">"scheme"</span>: <span class="tok-str">"webrtcexpo"</span>,
+    <span class="tok-str">"main"</span>: <span class="tok-str">"expo-router/entry"</span>,
+    <span class="tok-str">"plugins"</span>: [
+      <span class="tok-str">"expo-router"</span>,
+      <span class="tok-str">"@config-plugins/react-native-webrtc"</span>,
+      [
+        <span class="tok-str">"expo-camera"</span>,
+        {
+          <span class="tok-str">"cameraPermission"</span>: <span class="tok-str">"Allow $(PRODUCT_NAME) to access your camera for video calls."</span>,
+          <span class="tok-str">"microphonePermission"</span>: <span class="tok-str">"Allow $(PRODUCT_NAME) to access your microphone for video calls."</span>
+        }
+      ]
+    ],
+    <span class="tok-str">"ios"</span>: {
+      <span class="tok-str">"infoPlist"</span>: {
+        <span class="tok-str">"NSCameraUsageDescription"</span>: <span class="tok-str">"Video calls need camera access."</span>,
+        <span class="tok-str">"NSMicrophoneUsageDescription"</span>: <span class="tok-str">"Video calls need microphone access."</span>
+      }
+    },
+    <span class="tok-str">"android"</span>: {
+      <span class="tok-str">"permissions"</span>: [
+        <span class="tok-str">"CAMERA"</span>,
+        <span class="tok-str">"RECORD_AUDIO"</span>,
+        <span class="tok-str">"MODIFY_AUDIO_SETTINGS"</span>,
+        <span class="tok-str">"ACCESS_NETWORK_STATE"</span>,
+        <span class="tok-str">"CHANGE_NETWORK_STATE"</span>,
+        <span class="tok-str">"INTERNET"</span>
+      ]
+    }
+  }
+}</pre>
+        </section>
+
+        <section id="devbuild">
+            <span class="num">05</span>
+            <h2>Build a development client</h2>
+            <p><code>react-native-webrtc</code> ships native code, so you bake it into a dev-client binary once, then
+                iterate over JS like normal.</p>
+            <pre><span class="filename">terminal</span>eas init
+eas build --profile development --platform android
+<span class="tok-com"># iOS (mac + Apple dev account required):</span>
+eas build --profile development --platform ios</pre>
+            <p>Install the resulting build on both test phones, then start the JS server:</p>
+            <pre><span class="filename">terminal</span>npx expo start --dev-client
+<span class="tok-com"># open the dev client on each phone and connect to this server</span></pre>
+            <div class="callout">
+                <strong>Expo Go will fail here</strong> with missing native module errors. If you see
+                <code>Cannot find native module 'WebRTCModule'</code>, you're in Go — switch to the dev-client build.
+            </div>
+        </section>
+
+        <section id="server">
+            <span class="num">06</span>
+            <h2>Create the signaling server</h2>
+            <p>One file, no auth, LAN-friendly. It just relays messages inside a room. Run it on your laptop; phones
+                reach it via your machine's LAN IP (e.g. <code>http://192.168.1.20:3000</code>).</p>
+            <pre><span class="filename">server/server.js</span><span class="tok-kw">const</span> { Server } = <span class="tok-fn">require</span>(<span class="tok-str">'socket.io'</span>);
+<span class="tok-kw">const</span> io = <span class="tok-kw">new</span> <span class="tok-fn">Server</span>(<span class="tok-const">3000</span>, { cors: { origin: <span class="tok-str">'*'</span> } });
+
+io.<span class="tok-fn">on</span>(<span class="tok-str">'connection'</span>, (socket) => {
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'join'</span>, (room) => {
+    socket.<span class="tok-fn">join</span>(room);
+    socket.to(room).<span class="tok-fn">emit</span>(<span class="tok-str">'peer-joined'</span>);
+  });
+
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'offer'</span>, ({ room, offer }) =>
+    socket.to(room).<span class="tok-fn">emit</span>(<span class="tok-str">'offer'</span>, offer));
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'answer'</span>, ({ room, answer }) =>
+    socket.to(room).<span class="tok-fn">emit</span>(<span class="tok-str">'answer'</span>, answer));
+  socket.<span class="tok-fn">on</span>(<span class="tok-str">'ice-candidate'</span>, ({ room, candidate }) =>
+    socket.to(room).<span class="tok-fn">emit</span>(<span class="tok-str">'ice-candidate'</span>, candidate));
+});
+
+console.<span class="tok-fn">log</span>(<span class="tok-str">'signaling on :3000'</span>);</pre>
+            <pre><span class="filename">lib/socket.ts — client singleton</span><span class="tok-kw">import</span> { io, Socket } <span class="tok-kw">from</span> <span class="tok-str">'socket.io-client'</span>;
+
+<span class="tok-com">// use your laptop LAN IP, not localhost — phones are separate devices</span>
+<span class="tok-kw">export const</span> SIGNALING_URL = <span class="tok-str">'http://192.168.1.20:3000'</span>;
+
+<span class="tok-kw">let</span> socket: Socket | <span class="tok-kw">null</span> = <span class="tok-kw">null</span>;
+<span class="tok-kw">export function</span> <span class="tok-fn">getSocket</span>() {
+  <span class="tok-kw">if</span> (!socket) socket = <span class="tok-fn">io</span>(SIGNALING_URL, { transports: [<span class="tok-str">'websocket'</span>] });
+  <span class="tok-kw">return</span> socket;
+}</pre>
+            <pre><span class="filename">lib/webrtc.ts</span><span class="tok-kw">export const</span> RTC_CONFIG = {
+  iceServers: [
+    { urls: <span class="tok-str">'stun:stun.l.google.com:19302'</span> },
+    <span class="tok-com">// add TURN here before testing on cellular</span>
+  ],
+};</pre>
+        </section>
+
+        <section id="permissions">
+            <span class="num">07</span>
+            <h2>Handle camera + mic permissions</h2>
+            <p>Ask <em>before</em> <code>getUserMedia</code>. Android will reject the capture otherwise, and iOS needs
+                the usage strings from <code>app.json</code>.</p>
+            <pre><span class="filename">lib/permissions.ts</span><span class="tok-kw">import</span> { Camera } <span class="tok-kw">from</span> <span class="tok-str">'expo-camera'</span>;
+
+<span class="tok-kw">export async function</span> <span class="tok-fn">ensurePermissions</span>(): <span class="tok-kw">Promise</span>&lt;<span class="tok-kw">boolean</span>&gt; {
+  <span class="tok-kw">const</span> cam = <span class="tok-kw">await</span> Camera.<span class="tok-fn">requestCameraPermissionsAsync</span>();
+  <span class="tok-kw">const</span> mic = <span class="tok-kw">await</span> Camera.<span class="tok-fn">requestMicrophonePermissionsAsync</span>();
+  <span class="tok-kw">return</span> cam.status === <span class="tok-str">'granted'</span> &amp;&amp; mic.status === <span class="tok-str">'granted'</span>;
+}</pre>
+        </section>
+
+        <section id="call">
+            <span class="num">08</span>
+            <h2>Wire the call logic</h2>
+            <p>One hook owns the peer connection: grabs the camera, joins the socket room, does offer/answer/ICE, and
+                exposes the two streams plus hang-up. The second phone to join becomes the caller.</p>
+            <pre><span class="filename">hooks/useCall.ts</span><span class="tok-kw">import</span> { <span class="tok-kw">useEffect</span>, <span class="tok-kw">useRef</span>, <span class="tok-kw">useState</span> } <span class="tok-kw">from</span> <span class="tok-str">'react'</span>;
+<span class="tok-kw">import</span> {
+  RTCPeerConnection, RTCIceCandidate, RTCSessionDescription,
+  mediaDevices, MediaStream,
+} <span class="tok-kw">from</span> <span class="tok-str">'react-native-webrtc'</span>;
+<span class="tok-kw">import</span> { <span class="tok-fn">getSocket</span> } <span class="tok-kw">from</span> <span class="tok-str">'../lib/socket'</span>;
+<span class="tok-kw">import</span> { RTC_CONFIG } <span class="tok-kw">from</span> <span class="tok-str">'../lib/webrtc'</span>;
+<span class="tok-kw">import</span> { <span class="tok-fn">ensurePermissions</span> } <span class="tok-kw">from</span> <span class="tok-str">'../lib/permissions'</span>;
+
+<span class="tok-kw">export function</span> <span class="tok-fn">useCall</span>(room: <span class="tok-kw">string</span>) {
+  <span class="tok-kw">const</span> [local, setLocal] = <span class="tok-fn">useState</span>&lt;MediaStream | <span class="tok-kw">null</span>&gt;(<span class="tok-kw">null</span>);
+  <span class="tok-kw">const</span> [remote, setRemote] = <span class="tok-fn">useState</span>&lt;MediaStream | <span class="tok-kw">null</span>&gt;(<span class="tok-kw">null</span>);
+  <span class="tok-kw">const</span> [status, setStatus] = <span class="tok-fn">useState</span>(<span class="tok-str">'joining'</span>);
+  <span class="tok-kw">const</span> pc = <span class="tok-fn">useRef</span>&lt;RTCPeerConnection | <span class="tok-kw">null</span>&gt;(<span class="tok-kw">null</span>);
+
+  <span class="tok-fn">useEffect</span>(() => {
+    <span class="tok-kw">let</span> alive = <span class="tok-kw">true</span>;
+    <span class="tok-kw">const</span> socket = <span class="tok-fn">getSocket</span>();
+
+    <span class="tok-kw">async function</span> <span class="tok-fn">setup</span>() {
+      <span class="tok-kw">const</span> ok = <span class="tok-kw">await</span> <span class="tok-fn">ensurePermissions</span>();
+      <span class="tok-kw">if</span> (!ok || !alive) { <span class="tok-fn">setStatus</span>(<span class="tok-str">'blocked'</span>); <span class="tok-kw">return</span>; }
+
+      <span class="tok-kw">const</span> stream = <span class="tok-kw">await</span> mediaDevices.<span class="tok-fn">getUserMedia</span>({
+        audio: <span class="tok-kw">true</span>, video: { frameRate: <span class="tok-const">30</span>, facingMode: <span class="tok-str">'user'</span> },
+      });
+      <span class="tok-kw">if</span> (!alive) <span class="tok-kw">return</span>;
+      <span class="tok-fn">setLocal</span>(stream);
+
+      <span class="tok-kw">const</span> peer = <span class="tok-kw">new</span> <span class="tok-fn">RTCPeerConnection</span>(RTC_CONFIG);
+      pc.current = peer;
+      stream.<span class="tok-fn">getTracks</span>().<span class="tok-fn">forEach</span>((t) => peer.<span class="tok-fn">addTrack</span>(t, stream));
+
+      peer.ontrack = (e) => alive &amp;&amp; <span class="tok-fn">setRemote</span>(e.streams[<span class="tok-const">0</span>]);
+      peer.onicecandidate = (e) => {
+        <span class="tok-kw">if</span> (e.candidate) socket.<span class="tok-fn">emit</span>(<span class="tok-str">'ice-candidate'</span>, { room, candidate: e.candidate });
+      };
+      peer.onconnectionstatechange = () => alive &amp;&amp; <span class="tok-fn">setStatus</span>(peer.connectionState);
+
+      socket.<span class="tok-fn">emit</span>(<span class="tok-str">'join'</span>, room);
+
+      <span class="tok-com">// second to join calls first — 'peer-joined' means someone is waiting</span>
+      socket.<span class="tok-fn">on</span>(<span class="tok-str">'peer-joined'</span>, <span class="tok-kw">async</span> () => {
+        <span class="tok-kw">const</span> offer = <span class="tok-kw">await</span> peer.<span class="tok-fn">createOffer</span>();
+        <span class="tok-kw">await</span> peer.<span class="tok-fn">setLocalDescription</span>(offer);
+        socket.<span class="tok-fn">emit</span>(<span class="tok-str">'offer'</span>, { room, offer });
+      });
+      socket.<span class="tok-fn">on</span>(<span class="tok-str">'offer'</span>, <span class="tok-kw">async</span> (offer) => {
+        <span class="tok-kw">await</span> peer.<span class="tok-fn">setRemoteDescription</span>(<span class="tok-kw">new</span> <span class="tok-fn">RTCSessionDescription</span>(offer));
+        <span class="tok-kw">const</span> answer = <span class="tok-kw">await</span> peer.<span class="tok-fn">createAnswer</span>();
+        <span class="tok-kw">await</span> peer.<span class="tok-fn">setLocalDescription</span>(answer);
+        socket.<span class="tok-fn">emit</span>(<span class="tok-str">'answer'</span>, { room, answer });
+      });
+      socket.<span class="tok-fn">on</span>(<span class="tok-str">'answer'</span>, <span class="tok-kw">async</span> (answer) => {
+        <span class="tok-kw">await</span> peer.<span class="tok-fn">setRemoteDescription</span>(<span class="tok-kw">new</span> <span class="tok-fn">RTCSessionDescription</span>(answer));
+      });
+      socket.<span class="tok-fn">on</span>(<span class="tok-str">'ice-candidate'</span>, <span class="tok-kw">async</span> (c) => {
+        <span class="tok-kw">await</span> peer.<span class="tok-fn">addIceCandidate</span>(<span class="tok-kw">new</span> <span class="tok-fn">RTCIceCandidate</span>(c));
+      });
+    }
+    <span class="tok-fn">setup</span>();
+
+    <span class="tok-kw">return</span> () => {
+      alive = <span class="tok-kw">false</span>;
+      socket.<span class="tok-fn">off</span>(<span class="tok-str">'peer-joined'</span>);
+      socket.<span class="tok-fn">off</span>(<span class="tok-str">'offer'</span>);
+      socket.<span class="tok-fn">off</span>(<span class="tok-str">'answer'</span>);
+      socket.<span class="tok-fn">off</span>(<span class="tok-str">'ice-candidate'</span>);
+      pc.current?.<span class="tok-fn">close</span>();
+    };
+  }, [room]);
+
+  <span class="tok-kw">function</span> <span class="tok-fn">hangUp</span>(localStream: MediaStream | <span class="tok-kw">null</span>) {
+    localStream?.<span class="tok-fn">getTracks</span>().<span class="tok-fn">forEach</span>((t) => t.<span class="tok-fn">stop</span>());
+    pc.current?.<span class="tok-fn">close</span>();
+  }
+
+  <span class="tok-kw">return</span> { local, remote, status, hangUp };
+}</pre>
+        </section>
+
+        <section id="ui">
+            <span class="num">09</span>
+            <h2>Build the UI screens</h2>
+            <p>Join screen collects a room name; call screen shows remote full-screen, local picture-in-picture, and
+                mute / flip / hang-up controls.</p>
+            <pre><span class="filename">app/index.tsx — join</span><span class="tok-kw">import</span> { <span class="tok-kw">useState</span> } <span class="tok-kw">from</span> <span class="tok-str">'react'</span>;
+<span class="tok-kw">import</span> { Button, TextInput, View, Text } <span class="tok-kw">from</span> <span class="tok-str">'react-native'</span>;
+<span class="tok-kw">import</span> { <span class="tok-fn">useRouter</span> } <span class="tok-kw">from</span> <span class="tok-str">'expo-router'</span>;
+
+<span class="tok-kw">export default function</span> <span class="tok-fn">Join</span>() {
+  <span class="tok-kw">const</span> [room, setRoom] = <span class="tok-fn">useState</span>(<span class="tok-str">'demo'</span>);
+  <span class="tok-kw">const</span> router = <span class="tok-fn">useRouter</span>();
+  <span class="tok-kw">return</span> (
+    &lt;View style={{ flex: <span class="tok-const">1</span>, justifyContent: <span class="tok-str">'center'</span>, padding: <span class="tok-const">24</span> }}&gt;
+      &lt;Text&gt;Room&lt;/Text&gt;
+      &lt;TextInput value={room} onChangeText={setRoom} autoCapitalize=<span class="tok-str">"none"</span> /&gt;
+      &lt;Button title=<span class="tok-str">"Join call"</span> onPress={() =&gt; router.<span class="tok-fn">push</span>(<span class="tok-str">`/call/${room}`</span>)} /&gt;
+    &lt;/View&gt;
+  );
+}</pre>
+            <pre><span class="filename">app/call/[room].tsx — call</span><span class="tok-kw">import</span> { <span class="tok-kw">useState</span> } <span class="tok-kw">from</span> <span class="tok-str">'react'</span>;
+<span class="tok-kw">import</span> { View, Button, Text } <span class="tok-kw">from</span> <span class="tok-str">'react-native'</span>;
+<span class="tok-kw">import</span> { <span class="tok-fn">useLocalSearchParams</span>, <span class="tok-fn">useRouter</span> } <span class="tok-kw">from</span> <span class="tok-str">'expo-router'</span>;
+<span class="tok-kw">import</span> { RTCView } <span class="tok-kw">from</span> <span class="tok-str">'react-native-webrtc'</span>;
+<span class="tok-kw">import</span> { <span class="tok-fn">useCall</span> } <span class="tok-kw">from</span> <span class="tok-str">'../../hooks/useCall'</span>;
+
+<span class="tok-kw">export default function</span> <span class="tok-fn">CallScreen</span>() {
+  <span class="tok-kw">const</span> { room } = <span class="tok-fn">useLocalSearchParams</span>&lt;{ room: <span class="tok-kw">string</span> }&gt;();
+  <span class="tok-kw">const</span> router = <span class="tok-fn">useRouter</span>();
+  <span class="tok-kw">const</span> { local, remote, status, hangUp } = <span class="tok-fn">useCall</span>(room);
+  <span class="tok-kw">const</span> [isFront, setIsFront] = <span class="tok-fn">useState</span>(<span class="tok-kw">true</span>);
+
+  <span class="tok-kw">async function</span> <span class="tok-fn">flip</span>() {
+    <span class="tok-kw">const</span> track = local?.<span class="tok-fn">getVideoTracks</span>()[<span class="tok-const">0</span>];
+    <span class="tok-kw">await</span> track?.<span class="tok-fn">applyConstraints</span>({ facingMode: isFront ? <span class="tok-str">'environment'</span> : <span class="tok-str">'user'</span> });
+    <span class="tok-fn">setIsFront</span>(!isFront);
+  }
+
+  <span class="tok-kw">return</span> (
+    &lt;View style={{ flex: <span class="tok-const">1</span>, backgroundColor: <span class="tok-str">'#000'</span> }}&gt;
+      {remote
+        ? &lt;RTCView streamURL={remote.<span class="tok-fn">toURL</span>()} style={{ flex: <span class="tok-const">1</span> }} objectFit=<span class="tok-str">"cover"</span> /&gt;
+        : &lt;Text style={{ color: <span class="tok-str">'#fff'</span>, padding: <span class="tok-const">24</span> }}&gt;{status} — waiting for peer…&lt;/Text&gt;}
+      {local &amp;&amp; (
+        &lt;RTCView
+          streamURL={local.<span class="tok-fn">toURL</span>()}
+          style={{ position: <span class="tok-str">'absolute'</span>, top: <span class="tok-const">48</span>, right: <span class="tok-const">16</span>, width: <span class="tok-const">110</span>, height: <span class="tok-const">150</span> }}
+          objectFit=<span class="tok-str">"cover"</span> mirror
+        /&gt;
+      )}
+      &lt;View style={{ flexDirection: <span class="tok-str">'row'</span>, justifyContent: <span class="tok-str">'space-around'</span>, padding: <span class="tok-const">20</span> }}&gt;
+        &lt;Button title=<span class="tok-str">"Flip"</span> onPress={<span class="tok-fn">flip</span>} /&gt;
+        &lt;Button title=<span class="tok-str">"Mute"</span> onPress={() =&gt; local?.<span class="tok-fn">getAudioTracks</span>().<span class="tok-fn">forEach</span>((t) =&gt; (t.enabled = !t.enabled))} /&gt;
+        &lt;Button title=<span class="tok-str">"Hang up"</span> color=<span class="tok-str">"red"</span>
+          onPress={() =&gt; { <span class="tok-fn">hangUp</span>(local); router.<span class="tok-fn">back</span>(); }} /&gt;
+      &lt;/View&gt;
+    &lt;/View&gt;
+  );
+}</pre>
+            <p class="note">Mute toggles <code>track.enabled</code> (stays connected). Flip uses
+                <code>track.applyConstraints({ facingMode })</code> — <code>_switchCamera()</code> is deprecated since
+                v124.0.5 per the official <a
+                    href="https://github.com/react-native-webrtc/react-native-webrtc/blob/master/Documentation/BasicUsage.md"
+                    target="_blank" rel="noopener">BasicUsage</a>. Hang-up stops tracks and closes the peer connection.
+            </p>
+        </section>
+
+        <section id="run">
+            <span class="num">10</span>
+            <h2>Run it and debug</h2>
+            <ol>
+                <li>Start signaling: <code>node server/server.js</code> — note your LAN IP.</li>
+                <li>Set <code>SIGNALING_URL</code> in <code>lib/socket.ts</code> to <code>http://&lt;LAN-IP&gt;:3000</code>.</li>
+                <li>Start JS: <code>npx expo start --dev-client</code>, open the dev build on <strong>both</strong> phones.</li>
+                <li>Join the same room on both — second to join dials, first answers automatically.</li>
+            </ol>
+            <div class="table-wrap">
+                <table>
+                    <tr>
+                        <th>Symptom</th>
+                        <th>Fix</th>
+                    </tr>
+                    <tr>
+                        <td><code>WebRTCModule</code> missing</td>
+                        <td>You're in Expo Go — open the dev-client build instead.</td>
+                    </tr>
+                    <tr>
+                        <td>Stuck on "joining"</td>
+                        <td>Phones can't reach the server — same Wi-Fi, LAN IP (not localhost), firewall open on :3000.</td>
+                    </tr>
+                    <tr>
+                        <td>Black remote video</td>
+                        <td>Permissions denied or <code>ontrack</code> missed — re-grant, reload both clients.</td>
+                    </tr>
+                    <tr>
+                        <td>Works on Wi-Fi, fails on cellular</td>
+                        <td>Add a TURN server to <code>lib/webrtc.ts</code>.</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <a href="index.html">&larr; field guide</a> · <a href="file-share.html">file-share demo →</a> · expo + webrtc end-to-end · refs: <a
+            href="https://github.com/react-native-webrtc/react-native-webrtc" target="_blank" rel="noopener">official
+            repo</a> · <a
+            href="https://github.com/react-native-webrtc/react-native-webrtc/blob/master/Documentation/BasicUsage.md"
+            target="_blank" rel="noopener">BasicUsage</a> · <a
+            href="https://github.com/react-native-webrtc/react-native-webrtc/blob/master/Documentation/CallGuide.md"
+            target="_blank" rel="noopener">CallGuide</a>
+    </footer>
+
+</body>
+
+</html>

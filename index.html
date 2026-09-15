@@ -4,8 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A field guide to react-native-webrtc: signaling handshake, video calls, data channels, cleanup, and gotchas for iOS and Android.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
     <title>react-native-webrtc — a field guide</title>
     <style>
+        html {
+            scroll-behavior: smooth;
+        }
         :root {
             --bg: #0c1210;
             --bg-panel: #121a17;
@@ -15,8 +22,8 @@
             --signal: #ff8a4c;
             --signal-dim: #7a4a2e;
             --ok: #5ecb95;
-            --font-display: 'Iowan Old Style', 'Georgia', serif;
-            --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-display: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-body: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             --font-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
         }
 
@@ -94,7 +101,8 @@
 
         h1 {
             font-family: var(--font-display);
-            font-weight: 400;
+            font-weight: 600;
+            letter-spacing: -0.02em;
             font-size: clamp(2.4rem, 5vw, 3.6rem);
             line-height: 1.08;
             max-width: 14ch;
@@ -115,7 +123,7 @@
         nav.toc {
             max-width: 920px;
             margin: 0 auto 3rem;
-            padding: 0 1.5rem;
+            padding: 1rem 1.5rem;
             display: flex;
             flex-wrap: wrap;
             gap: 0 1.6rem;
@@ -124,8 +132,6 @@
             color: var(--text-dim);
             border-top: 1px solid var(--line);
             border-bottom: 1px solid var(--line);
-            padding-top: 1rem;
-            padding-bottom: 1rem;
         }
 
         nav.toc a {
@@ -148,6 +154,7 @@
         section {
             padding-top: 4.5rem;
             border-top: 1px solid var(--line);
+            scroll-margin-top: 70px;
         }
 
         section:first-child {
@@ -164,7 +171,8 @@
 
         h2 {
             font-family: var(--font-display);
-            font-weight: 400;
+            font-weight: 600;
+            letter-spacing: -0.01em;
             font-size: 1.9rem;
             color: #f4efe8;
             margin-bottom: 1rem;
@@ -270,8 +278,10 @@
 
         #topbar {
             position: sticky;
-            top: 10px;
-            background: #000;
+            top: 0;
+            background: rgba(12, 18, 16, 0.92);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 99;
         }
 
@@ -308,11 +318,19 @@
             font-size: 0.92rem;
         }
 
+        .table-wrap {
+            overflow-x: auto;
+            max-width: 66ch;
+            margin: 1.4rem 0;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+        }
+
         table {
             width: 100%;
-            max-width: 66ch;
+            min-width: 560px;
             border-collapse: collapse;
-            margin: 1.4rem 0;
+            margin: 0;
             font-size: 0.9rem;
         }
 
@@ -353,7 +371,8 @@
         <h1>Peer-to-peer video, audio, and data — inside a React Native app</h1>
         <p class="lede">A working guide to <code>react-native-webrtc</code>: what it actually does, how the signaling
             handshake fits together, and the code you need for video calls and raw data channels. Skip the reference-doc
-            skim — this is written to be read start to finish.</p>
+            skim — this is written to be read start to finish. Ready to build? See the <a
+                href="expo-example.html">Expo end-to-end example →</a></p>
     </header>
 
     <nav class="toc" id="topbar">
@@ -365,6 +384,8 @@
         <a href="#data-channel">Data channels</a>
         <a href="#cleanup">Cleanup</a>
         <a href="#gotchas">Gotchas</a>
+        <a href="expo-example.html" style="color: var(--signal);">Expo example →</a>
+        <a href="file-share.html" style="color: var(--signal);">File share →</a>
     </nav>
 
     <main>
@@ -382,9 +403,11 @@
                 peers agree to connect, but the initial "here's who I am and how to reach me" exchange is left entirely
                 up to you — usually over a WebSocket or an existing backend.</p>
             <div class="callout">
-                <strong>Platform support:</strong> iOS and Android only. There's no macOS or Windows
-                (react-native-windows) support at the moment. It also needs native code, so it won't run inside Expo Go
-                — you'd need a custom dev client via <code>expo-dev-client</code>.
+                <strong>Platform support (per official repo):</strong> Android and iOS are fully supported
+                (audio/video + data channels, WebRTC M124, Unified Plan only since v106). tvOS supports audio/video
+                only. macOS is not actively supported, Windows is not supported. Expo works via
+                <code>expo-dev-client</code> + <code>@config-plugins/react-native-webrtc</code> — never Expo Go.
+                See the <a href="expo-example.html">Expo end-to-end example</a>.
             </div>
         </section>
 
@@ -397,15 +420,21 @@ yarn add react-native-webrtc
 pnpm install react-native-webrtc</pre>
             <p>Both iOS and Android need a bit of native config after the package install:</p>
             <ul>
-                <li><strong>iOS:</strong> run <code>pod install</code>, and add camera/microphone usage descriptions
+                <li><strong>iOS:</strong> CocoaPods 1.10+, <code>platform :ios, '12.0'</code> or higher, run
+                    <code>pod install</code>, and add camera/microphone usage descriptions
                     (<code>NSCameraUsageDescription</code>, <code>NSMicrophoneUsageDescription</code>) to
                     <code>Info.plist</code>.
                 </li>
-                <li><strong>Android:</strong> add <code>CAMERA</code>, <code>RECORD_AUDIO</code>, and
-                    <code>INTERNET</code> permissions to <code>AndroidManifest.xml</code>, and request the runtime
-                    permissions before calling <code>getUserMedia</code>.
+                <li><strong>Android:</strong> API level 24+, add <code>CAMERA</code>,
+                    <code>RECORD_AUDIO</code>, <code>MODIFY_AUDIO_SETTINGS</code>, <code>ACCESS_NETWORK_STATE</code>,
+                    <code>CHANGE_NETWORK_STATE</code>, and <code>INTERNET</code> to
+                    <code>AndroidManifest.xml</code> (plus <code>BLUETOOTH*</code> for BT devices), enable Java 8
+                    support, and request the runtime permissions before calling <code>getUserMedia</code>.
                 </li>
             </ul>
+            <p class="note">Expo managed workflow? The <code>@config-plugins/react-native-webrtc</code> plugin handles
+                the manifest/plist, minSdk 24, and desugaring flag for you — see the
+                <a href="expo-example.html">Expo end-to-end example</a>.</p>
         </section>
 
         <section id="mental-model">
@@ -473,7 +502,10 @@ pc.onicecandidate = (event) => {
 
 <span class="tok-com">// caller: start the offer</span>
 <span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">startCall</span>() {
-  <span class="tok-kw">const</span> offer = <span class="tok-kw">await</span> pc.<span class="tok-fn">createOffer</span>();
+  <span class="tok-kw">const</span> offer = <span class="tok-kw">await</span> pc.<span class="tok-fn">createOffer</span>({
+    offerToReceiveAudio: <span class="tok-kw">true</span>,
+    offerToReceiveVideo: <span class="tok-kw">true</span>,
+  });
   <span class="tok-kw">await</span> pc.<span class="tok-fn">setLocalDescription</span>(offer);
   socket.<span class="tok-fn">emit</span>(<span class="tok-str">'offer'</span>, offer);
 }
@@ -492,9 +524,15 @@ socket.<span class="tok-fn">on</span>(<span class="tok-str">'answer'</span>, <sp
 });
 
 <span class="tok-com">// both sides: apply incoming candidates</span>
+<span class="tok-com">// if remoteDescription isn't set yet, queue them (see CallGuide step 5)</span>
 socket.<span class="tok-fn">on</span>(<span class="tok-str">'ice-candidate'</span>, <span class="tok-kw">async</span> (candidate) => {
   <span class="tok-kw">await</span> pc.<span class="tok-fn">addIceCandidate</span>(<span class="tok-kw">new</span> <span class="tok-fn">RTCIceCandidate</span>(candidate));
 });</pre>
+            <p class="note">Per the official <a
+                    href="https://github.com/react-native-webrtc/react-native-webrtc/blob/master/Documentation/CallGuide.md"
+                    target="_blank" rel="noopener">CallGuide</a>, candidates arriving before
+                <code>setRemoteDescription</code> should be queued in an array and flushed after — otherwise the
+                handshake can stall on slow networks.</p>
         </section>
 
         <section id="video-call">
@@ -513,7 +551,7 @@ socket.<span class="tok-fn">on</span>(<span class="tok-str">'ice-candidate'</spa
     <span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">setup</span>() {
       <span class="tok-kw">const</span> stream = <span class="tok-kw">await</span> mediaDevices.<span class="tok-fn">getUserMedia</span>({
         audio: <span class="tok-kw">true</span>,
-        video: { facingMode: <span class="tok-str">'user'</span> },
+        video: { frameRate: <span class="tok-const">30</span>, facingMode: <span class="tok-str">'user'</span> },
       });
       <span class="tok-fn">setLocalStream</span>(stream);
       stream.<span class="tok-fn">getTracks</span>().<span class="tok-fn">forEach</span>((track) => pc.<span class="tok-fn">addTrack</span>(track, stream));
@@ -523,7 +561,9 @@ socket.<span class="tok-fn">on</span>(<span class="tok-str">'ice-candidate'</spa
     pc.ontrack = (event) => {
       <span class="tok-fn">setRemoteStream</span>(event.streams[<span class="tok-const">0</span>]);
     };
-  }, []);
+
+    <span class="tok-kw">return</span> () => { pc.ontrack = <span class="tok-kw">null</span>; };
+  }, [pc]);
 
   <span class="tok-kw">return</span> (
     &lt;&gt;
@@ -531,7 +571,7 @@ socket.<span class="tok-fn">on</span>(<span class="tok-str">'ice-candidate'</spa
         &lt;RTCView streamURL={remoteStream.<span class="tok-fn">toURL</span>()} style={styles.remote} /&gt;
       )}
       {localStream &amp;&amp; (
-        &lt;RTCView streamURL={localStream.<span class="tok-fn">toURL</span>()} style={styles.local} objectFit=<span class="tok-str">"cover"</span> /&gt;
+        &lt;RTCView streamURL={localStream.<span class="tok-fn">toURL</span>()} style={styles.local} objectFit=<span class="tok-str">"cover"</span> mirror /&gt;
       )}
     &lt;/&gt;
   );
@@ -569,6 +609,7 @@ pc.ondatachannel = (event) => {
             <p>For binary payloads — like file chunks — send <code>ArrayBuffer</code>s and set
                 <code>channel.binaryType = 'arraybuffer'</code>. Chunk large files (64KB is a safe default) and
                 reassemble on the other end; data channels don't guarantee a message-size ceiling across all platforms.
+                Full demo: <a href="file-share.html">file-sharing app →</a>
             </p>
         </section>
 
@@ -588,6 +629,7 @@ pc.ondatachannel = (event) => {
         <section id="gotchas">
             <span class="num">08</span>
             <h2>Things that bite people</h2>
+            <div class="table-wrap">
             <table>
                 <tr>
                     <th>Issue</th>
@@ -613,13 +655,15 @@ pc.ondatachannel = (event) => {
                         the stream in state, not a ref checked once.</td>
                 </tr>
             </table>
+            </div>
         </section>
 
     </main>
 
     <footer>
         react-native-webrtc · <a href="https://github.com/react-native-webrtc/react-native-webrtc"
-            target="_blank">source on GitHub</a> · a WebRTC module for React Native, iOS + Android
+            target="_blank" rel="noopener">source on GitHub</a> · <a href="expo-example.html">Expo end-to-end example
+            →</a> · <a href="file-share.html">File-share demo →</a>
     </footer>
 
 </body>
