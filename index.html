@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>react-native-webrtc — a field guide</title>
+    <style>
+        :root {
+            --bg: #0c1210;
+            --bg-panel: #121a17;
+            --line: #24312c;
+            --text: #dce7e1;
+            --text-dim: #8ba69a;
+            --signal: #ff8a4c;
+            --signal-dim: #7a4a2e;
+            --ok: #5ecb95;
+            --font-display: 'Iowan Old Style', 'Georgia', serif;
+            --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            font-size: 16px;
+        }
+
+        a {
+            color: var(--signal);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* subtle scanning signal texture on the background */
+        .noise {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image: repeating-linear-gradient(0deg, rgba(255, 138, 76, 0.015) 0px, rgba(255, 138, 76, 0.015) 1px, transparent 1px, transparent 3px);
+        }
+
+        header.hero {
+            position: relative;
+            padding: 5rem 1.5rem 4rem;
+            max-width: 920px;
+            margin: 0 auto;
+        }
+
+        .kicker {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 1.6rem;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--ok);
+            box-shadow: 0 0 0 0 rgba(94, 203, 149, 0.6);
+            animation: ping 2.2s infinite;
+        }
+
+        @keyframes ping {
+            0% {
+                box-shadow: 0 0 0 0 rgba(94, 203, 149, 0.5);
+            }
+
+            70% {
+                box-shadow: 0 0 0 8px rgba(94, 203, 149, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(94, 203, 149, 0);
+            }
+        }
+
+        h1 {
+            font-family: var(--font-display);
+            font-weight: 400;
+            font-size: clamp(2.4rem, 5vw, 3.6rem);
+            line-height: 1.08;
+            max-width: 14ch;
+            color: #f4efe8;
+        }
+
+        .lede {
+            margin-top: 1.4rem;
+            max-width: 56ch;
+            color: var(--text-dim);
+            font-size: 1.08rem;
+        }
+
+        .lede code {
+            color: var(--text);
+        }
+
+        nav.toc {
+            max-width: 920px;
+            margin: 0 auto 3rem;
+            padding: 0 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0 1.6rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+
+        nav.toc a {
+            color: var(--text-dim);
+        }
+
+        nav.toc a:hover {
+            color: var(--signal);
+            text-decoration: none;
+        }
+
+        main {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 0 1.5rem 6rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        section {
+            padding-top: 4.5rem;
+            border-top: 1px solid var(--line);
+        }
+
+        section:first-child {
+            border-top: none;
+        }
+
+        .num {
+            font-family: var(--font-mono);
+            color: var(--signal-dim);
+            font-size: 0.85rem;
+            display: block;
+            margin-bottom: 0.8rem;
+        }
+
+        h2 {
+            font-family: var(--font-display);
+            font-weight: 400;
+            font-size: 1.9rem;
+            color: #f4efe8;
+            margin-bottom: 1rem;
+        }
+
+        h3 {
+            font-family: var(--font-body);
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: var(--text);
+            margin: 2rem 0 0.8rem;
+        }
+
+        p {
+            max-width: 68ch;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        p.note {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+
+        ul,
+        ol {
+            margin: 0 0 1rem 1.3rem;
+            max-width: 66ch;
+        }
+
+        li {
+            margin-bottom: 0.4rem;
+        }
+
+        .callout {
+            border-left: 2px solid var(--signal);
+            background: rgba(255, 138, 76, 0.06);
+            padding: 0.9rem 1.1rem;
+            margin: 1.4rem 0;
+            max-width: 66ch;
+            font-size: 0.95rem;
+            color: var(--text-dim);
+        }
+
+        .callout strong {
+            color: var(--text);
+        }
+
+        pre {
+            background: var(--bg-panel);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            padding: 1.2rem 1.3rem;
+            overflow-x: auto;
+            margin: 1.2rem 0 1.6rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.55;
+        }
+
+        pre .filename {
+            display: block;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-bottom: 0.8rem;
+            text-transform: none;
+        }
+
+        code {
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+        }
+
+        p code,
+        li code {
+            background: var(--bg-panel);
+            border: 1px solid var(--line);
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            color: #f0c9a8;
+        }
+
+        .tok-kw {
+            color: #ff8a4c;
+        }
+
+        .tok-str {
+            color: #a8d5ba;
+        }
+
+        .tok-com {
+            color: #5b7269;
+        }
+
+        .tok-fn {
+            color: #8fc7e8;
+        }
+
+        .tok-const {
+            color: #e8b76e;
+        }
+
+        #topbar {
+            position: sticky;
+            top: 10px;
+            background: #000;
+            z-index: 99;
+        }
+
+        .flow {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin: 1.6rem 0 2rem;
+            max-width: 66ch;
+        }
+
+        .flow-step {
+            display: flex;
+            gap: 1rem;
+            padding: 0.9rem 0;
+            border-bottom: 1px dashed var(--line);
+            align-items: baseline;
+        }
+
+        .flow-step:last-child {
+            border-bottom: none;
+        }
+
+        .flow-actor {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--signal);
+            min-width: 6rem;
+            flex-shrink: 0;
+        }
+
+        .flow-desc {
+            color: var(--text-dim);
+            font-size: 0.92rem;
+        }
+
+        table {
+            width: 100%;
+            max-width: 66ch;
+            border-collapse: collapse;
+            margin: 1.4rem 0;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 0.55rem 0.8rem;
+            border-bottom: 1px solid var(--line);
+        }
+
+        th {
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        td code {
+            font-size: 0.82rem;
+        }
+
+        footer {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 4rem;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            font-family: var(--font-mono);
+            border-top: 1px solid var(--line);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="noise"></div>
+
+    <header class="hero">
+        <div class="kicker"><span class="pulse"></span> connection established — react-native-webrtc</div>
+        <h1>Peer-to-peer video, audio, and data — inside a React Native app</h1>
+        <p class="lede">A working guide to <code>react-native-webrtc</code>: what it actually does, how the signaling
+            handshake fits together, and the code you need for video calls and raw data channels. Skip the reference-doc
+            skim — this is written to be read start to finish.</p>
+    </header>
+
+    <nav class="toc" id="topbar">
+        <a href="#what-it-is">What it is</a>
+        <a href="#install">Install</a>
+        <a href="#mental-model">The handshake</a>
+        <a href="#signaling">Signaling server</a>
+        <a href="#video-call">Video call</a>
+        <a href="#data-channel">Data channels</a>
+        <a href="#cleanup">Cleanup</a>
+        <a href="#gotchas">Gotchas</a>
+    </nav>
+
+    <main>
+
+        <section id="what-it-is">
+            <span class="num">01</span>
+            <h2>What it is, and what it isn't</h2>
+            <p><code>react-native-webrtc</code> is a native module that bridges the browser's WebRTC APIs into React
+                Native. It gives you <code>RTCPeerConnection</code>, <code>RTCIceCandidate</code>,
+                <code>RTCSessionDescription</code>, <code>mediaDevices</code>, and an <code>RTCView</code> component for
+                rendering a video stream — the same shapes you'd use in web WebRTC, ported to iOS and Android via native
+                code.
+            </p>
+            <p>It does <strong>not</strong> include a signaling server. WebRTC handles the media transport once two
+                peers agree to connect, but the initial "here's who I am and how to reach me" exchange is left entirely
+                up to you — usually over a WebSocket or an existing backend.</p>
+            <div class="callout">
+                <strong>Platform support:</strong> iOS and Android only. There's no macOS or Windows
+                (react-native-windows) support at the moment. It also needs native code, so it won't run inside Expo Go
+                — you'd need a custom dev client via <code>expo-dev-client</code>.
+            </div>
+        </section>
+
+        <section id="install">
+            <span class="num">02</span>
+            <h2>Install</h2>
+            <pre><span class="filename">terminal</span><span class="tok-com"># pick one</span>
+npm install react-native-webrtc --save
+yarn add react-native-webrtc
+pnpm install react-native-webrtc</pre>
+            <p>Both iOS and Android need a bit of native config after the package install:</p>
+            <ul>
+                <li><strong>iOS:</strong> run <code>pod install</code>, and add camera/microphone usage descriptions
+                    (<code>NSCameraUsageDescription</code>, <code>NSMicrophoneUsageDescription</code>) to
+                    <code>Info.plist</code>.
+                </li>
+                <li><strong>Android:</strong> add <code>CAMERA</code>, <code>RECORD_AUDIO</code>, and
+                    <code>INTERNET</code> permissions to <code>AndroidManifest.xml</code>, and request the runtime
+                    permissions before calling <code>getUserMedia</code>.
+                </li>
+            </ul>
+        </section>
+
+        <section id="mental-model">
+            <span class="num">03</span>
+            <h2>The handshake, in plain terms</h2>
+            <p>Every WebRTC connection — video, audio, or plain data — goes through the same offer/answer dance before
+                any media flows. This part trips people up more than the code does, so it's worth having straight before
+                you write anything.</p>
+            <div class="flow">
+                <div class="flow-step">
+                    <span class="flow-actor">Caller</span>
+                    <span class="flow-desc">creates an <code>RTCPeerConnection</code>, generates an <em>offer</em> (a
+                        description of the media/data it wants to send), and sends that offer to the callee —
+                        <strong>through your own signaling channel</strong>, not WebRTC.</span>
+                </div>
+                <div class="flow-step">
+                    <span class="flow-actor">Callee</span>
+                    <span class="flow-desc">receives the offer, sets it as the remote description, generates an
+                        <em>answer</em>, and sends it back — again over your signaling channel.</span>
+                </div>
+                <div class="flow-step">
+                    <span class="flow-actor">Both sides</span>
+                    <span class="flow-desc">exchange <em>ICE candidates</em> as they're discovered — each candidate is a
+                        possible network path (local IP, router-mapped IP via STUN, or a relay via TURN).</span>
+                </div>
+                <div class="flow-step">
+                    <span class="flow-actor">Connection</span>
+                    <span class="flow-desc">once a working candidate pair is found, the peer connection fires
+                        <code>connectionState: "connected"</code> and media/data starts flowing directly between
+                        devices.</span>
+                </div>
+            </div>
+            <p class="note">Everything in the first three rows is signaling — plumbing you own. Only the last row is
+                WebRTC itself.</p>
+        </section>
+
+        <section id="signaling">
+            <span class="num">04</span>
+            <h2>A minimal signaling exchange</h2>
+            <p>You can use anything that can pass messages between two clients — a WebSocket server is the common
+                choice. Here's the client side of that exchange, assuming a <code>socket</code> object with
+                <code>emit</code>/<code>on</code>, sitting on top of a peer connection.
+            </p>
+            <pre><span class="filename">signaling.ts</span><span class="tok-kw">import</span> {
+  RTCPeerConnection,
+  RTCIceCandidate,
+  RTCSessionDescription,
+} <span class="tok-kw">from</span> <span class="tok-str">'react-native-webrtc'</span>;
+
+<span class="tok-kw">const</span> configuration = {
+  iceServers: [
+    { urls: <span class="tok-str">'stun:stun.l.google.com:19302'</span> },
+    <span class="tok-com">// add a TURN server for connections behind restrictive NATs</span>
+  ],
+};
+
+<span class="tok-kw">const</span> pc = <span class="tok-kw">new</span> <span class="tok-fn">RTCPeerConnection</span>(configuration);
+
+<span class="tok-com">// outgoing ICE candidates: forward each one over your signaling channel</span>
+pc.onicecandidate = (event) => {
+  <span class="tok-kw">if</span> (event.candidate) {
+    socket.<span class="tok-fn">emit</span>(<span class="tok-str">'ice-candidate'</span>, event.candidate);
+  }
+};
+
+<span class="tok-com">// caller: start the offer</span>
+<span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">startCall</span>() {
+  <span class="tok-kw">const</span> offer = <span class="tok-kw">await</span> pc.<span class="tok-fn">createOffer</span>();
+  <span class="tok-kw">await</span> pc.<span class="tok-fn">setLocalDescription</span>(offer);
+  socket.<span class="tok-fn">emit</span>(<span class="tok-str">'offer'</span>, offer);
+}
+
+<span class="tok-com">// callee: respond to an incoming offer</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'offer'</span>, <span class="tok-kw">async</span> (offer) => {
+  <span class="tok-kw">await</span> pc.<span class="tok-fn">setRemoteDescription</span>(<span class="tok-kw">new</span> <span class="tok-fn">RTCSessionDescription</span>(offer));
+  <span class="tok-kw">const</span> answer = <span class="tok-kw">await</span> pc.<span class="tok-fn">createAnswer</span>();
+  <span class="tok-kw">await</span> pc.<span class="tok-fn">setLocalDescription</span>(answer);
+  socket.<span class="tok-fn">emit</span>(<span class="tok-str">'answer'</span>, answer);
+});
+
+<span class="tok-com">// caller: accept the answer</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'answer'</span>, <span class="tok-kw">async</span> (answer) => {
+  <span class="tok-kw">await</span> pc.<span class="tok-fn">setRemoteDescription</span>(<span class="tok-kw">new</span> <span class="tok-fn">RTCSessionDescription</span>(answer));
+});
+
+<span class="tok-com">// both sides: apply incoming candidates</span>
+socket.<span class="tok-fn">on</span>(<span class="tok-str">'ice-candidate'</span>, <span class="tok-kw">async</span> (candidate) => {
+  <span class="tok-kw">await</span> pc.<span class="tok-fn">addIceCandidate</span>(<span class="tok-kw">new</span> <span class="tok-fn">RTCIceCandidate</span>(candidate));
+});</pre>
+        </section>
+
+        <section id="video-call">
+            <span class="num">05</span>
+            <h2>A video call, end to end</h2>
+            <p>Grabbing the camera and attaching it happens through <code>mediaDevices.getUserMedia</code>, same shape
+                as on the web. Add the resulting tracks to the peer connection before you create the offer.</p>
+            <pre><span class="filename">VideoCallScreen.tsx</span><span class="tok-kw">import</span> { <span class="tok-kw">useEffect</span>, <span class="tok-kw">useRef</span>, <span class="tok-kw">useState</span> } <span class="tok-kw">from</span> <span class="tok-str">'react'</span>;
+<span class="tok-kw">import</span> { <span class="tok-fn">RTCView</span>, mediaDevices, MediaStream } <span class="tok-kw">from</span> <span class="tok-str">'react-native-webrtc'</span>;
+
+<span class="tok-kw">function</span> <span class="tok-fn">VideoCallScreen</span>({ pc }) {
+  <span class="tok-kw">const</span> [localStream, setLocalStream] = <span class="tok-fn">useState</span>&lt;MediaStream | <span class="tok-kw">null</span>&gt;(<span class="tok-kw">null</span>);
+  <span class="tok-kw">const</span> [remoteStream, setRemoteStream] = <span class="tok-fn">useState</span>&lt;MediaStream | <span class="tok-kw">null</span>&gt;(<span class="tok-kw">null</span>);
+
+  <span class="tok-fn">useEffect</span>(() => {
+    <span class="tok-kw">async</span> <span class="tok-kw">function</span> <span class="tok-fn">setup</span>() {
+      <span class="tok-kw">const</span> stream = <span class="tok-kw">await</span> mediaDevices.<span class="tok-fn">getUserMedia</span>({
+        audio: <span class="tok-kw">true</span>,
+        video: { facingMode: <span class="tok-str">'user'</span> },
+      });
+      <span class="tok-fn">setLocalStream</span>(stream);
+      stream.<span class="tok-fn">getTracks</span>().<span class="tok-fn">forEach</span>((track) => pc.<span class="tok-fn">addTrack</span>(track, stream));
+    }
+    <span class="tok-fn">setup</span>();
+
+    pc.ontrack = (event) => {
+      <span class="tok-fn">setRemoteStream</span>(event.streams[<span class="tok-const">0</span>]);
+    };
+  }, []);
+
+  <span class="tok-kw">return</span> (
+    &lt;&gt;
+      {remoteStream &amp;&amp; (
+        &lt;RTCView streamURL={remoteStream.<span class="tok-fn">toURL</span>()} style={styles.remote} /&gt;
+      )}
+      {localStream &amp;&amp; (
+        &lt;RTCView streamURL={localStream.<span class="tok-fn">toURL</span>()} style={styles.local} objectFit=<span class="tok-str">"cover"</span> /&gt;
+      )}
+    &lt;/&gt;
+  );
+}</pre>
+            <p class="note">Both <code>RTCView</code> instances read from a <code>MediaStream</code> via
+                <code>.toURL()</code> — it's not a real URL, just how the native view gets pointed at the right stream.
+            </p>
+        </section>
+
+        <section id="data-channel">
+            <span class="num">06</span>
+            <h2>Data channels, without any media</h2>
+            <p>If you just want to move bytes between two devices — file transfer, game state, chat — you don't need
+                <code>getUserMedia</code> at all. A <code>RTCDataChannel</code> rides over the same peer connection and
+                the same offer/answer/ICE handshake shown above.
+            </p>
+            <pre><span class="filename">dataChannel.ts</span><span class="tok-com">// caller creates the channel before making the offer</span>
+<span class="tok-kw">const</span> channel = pc.<span class="tok-fn">createDataChannel</span>(<span class="tok-str">'file-transfer'</span>, {
+  ordered: <span class="tok-kw">true</span>,
+});
+
+channel.onopen = () => {
+  channel.<span class="tok-fn">send</span>(<span class="tok-str">'hello from the caller'</span>);
+};
+
+channel.onmessage = (event) => {
+  console.<span class="tok-fn">log</span>(<span class="tok-str">'received:'</span>, event.data);
+};
+
+<span class="tok-com">// callee: the channel arrives on the peer connection, not created manually</span>
+pc.ondatachannel = (event) => {
+  <span class="tok-kw">const</span> receiveChannel = event.channel;
+  receiveChannel.onmessage = (e) => console.<span class="tok-fn">log</span>(<span class="tok-str">'got:'</span>, e.data);
+};</pre>
+            <p>For binary payloads — like file chunks — send <code>ArrayBuffer</code>s and set
+                <code>channel.binaryType = 'arraybuffer'</code>. Chunk large files (64KB is a safe default) and
+                reassemble on the other end; data channels don't guarantee a message-size ceiling across all platforms.
+            </p>
+        </section>
+
+        <section id="cleanup">
+            <span class="num">07</span>
+            <h2>Cleanup</h2>
+            <p>Peer connections and media tracks don't get garbage collected for free — leaving them open drains battery
+                and holds the camera/mic open. Tear down explicitly when a call ends or a screen unmounts.</p>
+            <pre><span class="filename">teardown.ts</span><span class="tok-kw">function</span> <span class="tok-fn">endCall</span>(pc, localStream) {
+  localStream?.<span class="tok-fn">getTracks</span>().<span class="tok-fn">forEach</span>((track) => track.<span class="tok-fn">stop</span>());
+  pc.<span class="tok-fn">close</span>();
+}</pre>
+            <p class="note">Do this in a <code>useEffect</code> cleanup function so it fires on unmount, not just on an
+                explicit "hang up" button.</p>
+        </section>
+
+        <section id="gotchas">
+            <span class="num">08</span>
+            <h2>Things that bite people</h2>
+            <table>
+                <tr>
+                    <th>Issue</th>
+                    <th>What's actually going on</th>
+                </tr>
+                <tr>
+                    <td><code>getUserMedia</code> hangs or rejects</td>
+                    <td>Runtime permission wasn't granted before the call — request camera/mic permission explicitly on
+                        Android first.</td>
+                </tr>
+                <tr>
+                    <td>Connects on wifi, fails on cellular</td>
+                    <td>No TURN server configured — STUN alone can't traverse symmetric NATs, which are common on
+                        carrier networks.</td>
+                </tr>
+                <tr>
+                    <td>Works in Expo Go, then doesn't</td>
+                    <td>It never did — this module has native code and needs a custom dev client, not Expo Go.</td>
+                </tr>
+                <tr>
+                    <td>Black remote video</td>
+                    <td>Usually <code>ontrack</code> firing before the component listening for it has mounted — buffer
+                        the stream in state, not a ref checked once.</td>
+                </tr>
+            </table>
+        </section>
+
+    </main>
+
+    <footer>
+        react-native-webrtc · <a href="https://github.com/react-native-webrtc/react-native-webrtc"
+            target="_blank">source on GitHub</a> · a WebRTC module for React Native, iOS + Android
+    </footer>
+
+</body>
+
+</html>
